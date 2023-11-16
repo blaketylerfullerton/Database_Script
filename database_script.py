@@ -101,6 +101,7 @@ def connect_to_database():
         print(f"Error: {e}")
         return None
 
+
 # Function to retrieve a row from the database and create a Student object
 def get_student_from_database(connection, student_id):
     try:
@@ -122,9 +123,10 @@ def get_student_from_database(connection, student_id):
 if __name__ == "__main__":
     # Connect to the database
     connection = connect_to_database()
+
     if connection:
         print(f'Retrieving')
-        for student_id_to_retrieve in range(1, 7):
+        for student_id_to_retrieve in range(1, 9):
             try: 
                 # Retrieve the student information from the database
                 student = get_student_from_database(connection, student_id_to_retrieve)
@@ -141,7 +143,7 @@ if __name__ == "__main__":
                     #Call the function to get assignments for these courses
                     student.get_todays_assignments_for_course(student.course_ids)
                     assignment_string = ' and '.join(student.assignments)
-                    text_message = f'Good Morning {student.name}{sun_emoji}. Today you have {student.assignment_counter} assignment(s):\n' + assignment_string
+                    text_message = f'Good Morning {student.name}{sun_emoji}. Today you have {student.assignment_counter} assignment(s) due:\n' + assignment_string
                     print(text_message)
                     #message = client.messages.create(
                     #from_='+18447314592',
