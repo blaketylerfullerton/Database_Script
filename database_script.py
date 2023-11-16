@@ -1,21 +1,15 @@
+import requests
+from datetime import datetime, timedelta
+from rich import print
+import json
 import mysql.connector
 from mysql.connector import Error
-import requests
-import json
-from datetime import datetime
-from rich import print
-import time
 from twilio.rest import Client
+account_sid = 'AC073f10733ecc95f504560b1d889f207d'
+auth_token = 'dc27373a1c4f16ac740dfb85cf6b5e8f'
+client = Client(account_sid, auth_token)
 
-smily_face = "\U0001F604"
-textOut = ""
-space = " "
-new_line = "\n\n"
-book_emoji = "\U0001F4DA"
-smily_face = "\U0001F604"
-thinking_emoji = '\U0001F914'
-red_alert_emoji = '\U00002757'
-
+sun_emoji = '\u2600'
 # Define the Student class
 class Student:
     def __init__(self, id, name, canvas_url, canvas_api_token, personal_phone_number):
@@ -27,33 +21,67 @@ class Student:
         self.course_names = []
         self.course_ids = []
         self.final_text = []
-
-    def get_assignments_for_course(self, course_id):
-        # Fetch assignments for a specific course using Canvas API
+        self.assignments = []
+        self.assignment_counter = 0
+    
+    def get_courses(self):
         headers = {'Authorization': f'Bearer {self.canvas_api_token}'}
-        ASSIGNMENTS_ENDPOINT = f'{self.canvas_url}/api/v1/courses/{course_id}/assignments'
-        response = requests.get(ASSIGNMENTS_ENDPOINT, headers=headers)
+        url = f'{student.canvas_url}/api/v1/courses'
+        try:
+            response = requests.get(url, headers=headers)
 
-        if response.status_code == 200:
-            assignments = json.loads(response.text)
-            return assignments
-        else:
-            return []
+            if response.status_code == 200:
+                try:
+                    courses = response.json()
+                    for course in courses:
+                        if 'name' in course:
+                            course_id = course['id']
+                            course_name = course['name']
+                            self.course_ids.append(course_id)
+                            self.course_names.append(course_name)
+                except ValueError:
+                    print("Response content is not valid JSON. The content received:\n", response.text)
+                    return
+            else:
+                print(f"Failed to retrieve courses. Status code: {response.status_code}")
+                print("Response content received:\n", response.text)
+                return
+        except Exception as e:
+            print(f"An error occurred getting courses")  
 
-# Function to retrieve a row from the database and create a Student object
-def get_student_from_database(connection, student_id):
-    try:
-        cursor = connection.cursor()
-        cursor.execute(f"SELECT * FROM athenalite2 WHERE id = {student_id}")
-        row = cursor.fetchone()
 
-        if row:
-            # Create a Student instance with attributes from the row
-            student = Student(row[0], row[1], row[2], row[3], row[4])
-            return student
-    except Error as e:
-        print(f"Error: {e}")
-        return None
+    def get_todays_assignments_for_course(self, course_ids):
+        for course_id in course_ids:
+            headers = {'Authorization': f'Bearer {self.canvas_api_token}'}
+            url = f"{self.canvas_url}/api/v1/courses/{course_id}/assignments"
+            
+            params = {
+                "bucket": "upcoming",  # Filter for upcoming assignments
+                "per_page": 10  # Set the number of assignments to retrieve
+            }
+
+            response = requests.get(url, headers=headers, params=params)
+
+            if response.status_code == 200:
+                try:
+                    assignments = response.json()
+                    
+                    tomorrow = datetime.now() #+ timedelta(days=1)
+                    
+                    for assignment in assignments:
+                        due_date_str = assignment.get('due_at')
+                        if due_date_str:
+                            due_date = datetime.strptime(due_date_str, "%Y-%m-%dT%H:%M:%SZ")
+                            if due_date.date() == tomorrow.date():
+                                assignment_info = f" {assignment['name']}"
+                                self.assignments.append(assignment_info)
+                                self.assignment_counter = self.assignment_counter + 1
+                                
+                except ValueError:
+                    print("Response is not valid JSON.")
+            else:
+                print(f"Failed to retrieve assignments for Course ID {course_id}. Status code: {response.status_code}")
+                print(response.text)
 
 # Function to connect to the MySQL database
 def connect_to_database():
@@ -73,121 +101,56 @@ def connect_to_database():
         print(f"Error: {e}")
         return None
 
-# Example SQL query
-sql_query = """
-SELECT * FROM athenalite2;
-"""
+# Function to retrieve a row from the database and create a Student object
+def get_student_from_database(connection, student_id):
+    try:
+        cursor = connection.cursor()
+        cursor.execute(f"SELECT * FROM athenalite2 WHERE id = {student_id}")
+        row = cursor.fetchone()
+
+        if row:
+            # Create a Student instance with attributes from the row
+            student = Student(row[0], row[1], row[2], row[3], row[4])
+            return student
+    except Error as e:
+        print(f"Error: {e}")
+        return None
+
+
+
 
 if __name__ == "__main__":
     # Connect to the database
     connection = connect_to_database()
-
     if connection:
-
-        # Specify the student ID you want to retrieve
-        student_id_to_retrieve = 6
         print(f'Retrieving')
+        for student_id_to_retrieve in range(1, 7):
+            try: 
+                # Retrieve the student information from the database
+                student = get_student_from_database(connection, student_id_to_retrieve)
+                if student:
+                    # Print student information
+                    print(f'Student ID: {student.id}')
+                    print(f'Student Name: {student.name}')
+                    print(f'Canvas URL: {student.canvas_url}')
+                    print(f'Canvas API Token: {student.canvas_api_token}')
+                    print(f'Personal Phone Number: {student.personal_phone_number}')     
+                    student.get_courses()
+                    print(f'Course Names: {student.course_names}')
+                    print(f'Course IDs: {student.course_ids}')
+                    #Call the function to get assignments for these courses
+                    student.get_todays_assignments_for_course(student.course_ids)
+                    assignment_string = ' and '.join(student.assignments)
+                    text_message = f'Good Morning {student.name}{sun_emoji}. Today you have {student.assignment_counter} assignment(s):\n' + assignment_string
+                    print(text_message)
+                    #message = client.messages.create(
+                    #from_='+18447314592',
+                    #body= text_message,
+                    #to=f'{student.personal_phone_number}'
+                    #)
+            except Exception as e:
+                print(f"An error occurred for student ID {student_id_to_retrieve}: {e}")    
 
-        # Retrieve the student information from the database
-        student = get_student_from_database(connection, student_id_to_retrieve)
-
-        if student:
-            student.course_names = []
-            student.course_ids = []
-            student.final_text = []
-
-            # Print the student attributes
-            print(f'Retrieving data for {student.name} {smily_face}: ')
-            print(f"Database ID: {student.id}")
-            print(f"Name: {student.name}")
-            print(f"Canvas URL: {student.canvas_url}")
-            print(f"Canvas API Token: {student.canvas_api_token}")
-            print(f"Phone Number: {student.personal_phone_number}")
-
-            # Make a GET request to a Canvas API endpoint
-            endpoint_url = f'{student.canvas_url}/api/v1/courses'
-            headers = {'Authorization': f'Bearer {student.canvas_api_token}'}
-
-            try:
-                response = requests.get(endpoint_url, headers=headers)
-
-                if response.status_code == 200:
-                    # Print the response content (JSON data)
-                    user_data = response.json()
-
-                    # Check if user_data is a list, and if it is, access the first item in the list
-                    if isinstance(user_data, list) and len(user_data) > 0:
-                        user_id = user_data[0]['id']
-                        print(f'User ID: {user_id}')
-
-                        # Iterate through the list of courses
-                        for course in user_data:
-                            # Check if the course object has a 'name' key (indicating it's a course with a name)
-                            if 'name' in course:
-                                class_id = course['id']
-                                class_name = course['name']
-                                print(f'Class ID: {class_id}, Class Name: {class_name}')
-                                student.course_ids.append(class_id)
-                                student.course_names.append(class_name)
-                                print(f"{student.name}'s Course ID's:")
-                                print(student.course_ids)
-
-                                # Fetch assignments for each course
-                                for course_id in student.course_ids:
-                                    assignments = student.get_assignments_for_course(course_id)
-
-                                    if assignments:
-                                        print(f"Assignments for Course ID {course_id} ({class_name}):")
-
-                                        now = datetime.now()
-
-                                        for assignment in assignments:
-                                            due_at_str = assignment.get('due_at')
-                                            name = assignment.get('name')
-
-                                            if due_at_str:
-                                                assignment_due_at = datetime.strptime(due_at_str, '%Y-%m-%dT%H:%M:%SZ')
-                                                if assignment_due_at.date() == now.date():  # Check if due today
-                                                    myText = f"{book_emoji}{class_name}: {name}' is due Today{red_alert_emoji}"
-                                                    textOut = textOut + space + myText + new_line
-
-                else:
-                    print(f"Error: Status Code {response.status_code}")
-
-            except requests.exceptions.RequestException as e:
-                print(f"Error: {e}")
-
-        # Close the database connection
-        connection.close()
-        
-
-        # Print the final text with assignments due today
-        if textOut:
-            textOut = f'Good morning {student.name}, Here are your upcoming assignments for today:\n' + textOut
-            print(textOut)
-            account_sid = 'AC073f10733ecc95f504560b1d889f207d'
-            auth_token = 'dc27373a1c4f16ac740dfb85cf6b5e8f'
-            client = Client(account_sid, auth_token)
-            #################### SENDING MESSAGE ###############################
-            message = client.messages.create(
-                from_='+18447314592',
-                body= textOut,
-                to=f'{student.personal_phone_number}'
-            )
-        else:
-            textOut = (f'Good morning {student.name}, You have no assignments due today! {smily_face}')
-            account_sid = 'AC073f10733ecc95f504560b1d889f207d'
-            auth_token = 'dc27373a1c4f16ac740dfb85cf6b5e8f'
-            client = Client(account_sid, auth_token)
-            #################### SENDING MESSAGE ###############################
-            message = client.messages.create(
-            from_='+18447314592',
-            body= textOut,
-            to=f'{student.personal_phone_number}'
-            )
+            
 
         
-
-
-
-
