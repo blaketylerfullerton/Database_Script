@@ -153,8 +153,8 @@ def connect_to_database():
         # Establish a connection to the MySQL server
         connection = mysql.connector.connect(
             username="doadmin",
-            password="AVNS_iuOLTr_1rACvDK-o1Nl",
-            host="athena-database-do-user-14760374-0.b.db.ondigitalocean.com",
+            password="AVNS_6PDeK3lhKf1fdv1BvBc",
+            host="athena-db-do-user-15687873-0.c.db.ondigitalocean.com",
             port=25060,
             database="defaultdb",
         )
