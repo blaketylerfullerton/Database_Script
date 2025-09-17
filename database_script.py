@@ -2,8 +2,6 @@ import requests
 from datetime import datetime, timedelta
 from rich import print
 import json
-import mysql.connector
-from mysql.connector import Error
 from twilio.rest import Client
 import pytz
 account_sid = 'AC073f10733ecc95f504560b1d889f207d'
@@ -147,71 +145,83 @@ class Student:
                 print(response.text)
 
 
-# Function to connect to the MySQL database
-def connect_to_database():
-    try:
-        # Establish a connection to the MySQL server
-        connection = mysql.connector.connect(
-            username="doadmin",
-            password="AVNS_6PDeK3lhKf1fdv1BvBc",
-            host="athena-db-do-user-15687873-0.c.db.ondigitalocean.com",
-            port=25060,
-            database="defaultdb",
+# In-memory student data storage
+STUDENTS_DATA = {
+    6: {
+        'id': 6,
+        'name': 'John Doe',
+        'canvas_url': 'https://canvas.example.edu',
+        'canvas_api_token': 'your_canvas_api_token_here',
+        'personal_phone_number': '+1234567890'
+    },
+    7: {
+        'id': 7,
+        'name': 'Jane Smith',
+        'canvas_url': 'https://canvas.example.edu',
+        'canvas_api_token': 'your_canvas_api_token_here',
+        'personal_phone_number': '+1234567891'
+    }
+}
+
+# Function to add a student to in-memory storage
+def add_student_to_memory(student_id, name, canvas_url, canvas_api_token, personal_phone_number):
+    STUDENTS_DATA[student_id] = {
+        'id': student_id,
+        'name': name,
+        'canvas_url': canvas_url,
+        'canvas_api_token': canvas_api_token,
+        'personal_phone_number': personal_phone_number
+    }
+    print(f"Added student {name} (ID: {student_id}) to memory")
+
+# Function to retrieve student data from in-memory storage and create a Student object
+def get_student_from_memory(student_id):
+    student_data = STUDENTS_DATA.get(student_id)
+    if student_data:
+        # Create a Student instance with attributes from the in-memory data
+        student = Student(
+            student_data['id'],
+            student_data['name'],
+            student_data['canvas_url'],
+            student_data['canvas_api_token'],
+            student_data['personal_phone_number']
         )
-        if connection.is_connected():
-            print("Connected to MySQL database")
-            return connection
-    except Error as e:
-        print(f"Error: {e}")
+        return student
+    else:
+        print(f"Student with ID {student_id} not found in memory")
         return None
 
-
-# Function to retrieve a row from the database and create a Student object
-def get_student_from_database(connection, student_id):
-    try:
-        cursor = connection.cursor()
-        cursor.execute(f"SELECT * FROM athenalite2 WHERE id = {student_id}")
-        row = cursor.fetchone()
-
-        if row:
-            # Create a Student instance with attributes from the row
-            student = Student(row[0], row[1], row[2], row[3], row[4])
-            return student
-    except Error as e:
-        print(f"Error: {e}")
-        return None
+# Function to list all students in memory
+def list_all_students():
+    print("Students in memory:")
+    for student_id, data in STUDENTS_DATA.items():
+        print(f"  ID: {student_id}, Name: {data['name']}")
+    return list(STUDENTS_DATA.keys())
 
 
 
 
 if __name__ == "__main__":
-    # Connect to the database
-    connection = connect_to_database()
-
-    if connection:
-        print(f'Retrieving')
-        for student_id_to_retrieve in range(6, 8):
-            try: 
-                # Retrieve the student information from the database
-                student = get_student_from_database(connection, student_id_to_retrieve)
-                if student:
-                    # Print student information
-                    print(f'Student ID: {student.id}')
-                    print(f'Student Name: {student.name}')
-                    print(f'Canvas URL: {student.canvas_url}')
-                    print(f'Canvas API Token: {student.canvas_api_token}')
-                    print(f'Personal Phone Number: {student.personal_phone_number}')     
-                    student.get_courses()
-                    print(f'Course Names: {student.course_names}')
-                    print(f'Course IDs: {student.course_ids}')
-                    #Call the function to get assignments for these courses
-                    student.get_todays_assignments_for_course(student.course_ids)
-                    assignment_string = ' and '.join(student.assignments)
-                    text_message = f'Good Morning {student.name}{sun_emoji}. Today you have {student.assignment_counter} assignment(s) due:\n' + assignment_string
-                    print(text_message)
-            except Exception as e:
-                print(f"An error occurred for student ID {student_id_to_retrieve}: {e}")    
-
-            
-
-        
+    print(f'Retrieving student data from memory...')
+    
+    for student_id_to_retrieve in range(6, 8):
+        try: 
+            # Retrieve the student information from in-memory storage
+            student = get_student_from_memory(student_id_to_retrieve)
+            if student:
+                # Print student information
+                print(f'Student ID: {student.id}')
+                print(f'Student Name: {student.name}')
+                print(f'Canvas URL: {student.canvas_url}')
+                print(f'Canvas API Token: {student.canvas_api_token}')
+                print(f'Personal Phone Number: {student.personal_phone_number}')     
+                student.get_courses()
+                print(f'Course Names: {student.course_names}')
+                print(f'Course IDs: {student.course_ids}')
+                #Call the function to get assignments for these courses
+                student.get_todays_assignments_for_course(student.course_ids)
+                assignment_string = ' and '.join(student.assignments)
+                text_message = f'Good Morning {student.name}{sun_emoji}. Today you have {student.assignment_counter} assignment(s) due:\n' + assignment_string
+                print(text_message)
+        except Exception as e:
+            print(f"An error occurred for student ID {student_id_to_retrieve}: {e}")    
